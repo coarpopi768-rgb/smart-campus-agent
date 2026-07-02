@@ -1,8 +1,9 @@
-langchain
+﻿langchain
 langgraph
+langgraph-checkpoint-sqlite
 langchain-community
 langchain-core
-langchain-hunggingface
+langchain-huggingface
 
 zhipuai
 

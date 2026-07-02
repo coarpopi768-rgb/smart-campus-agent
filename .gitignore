@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 
 **pycache**/
 *.pyc
@@ -42,3 +42,7 @@ uploads/
 
 temp/
 tmp/
+
+# Agent 运行时数据
+
+data/

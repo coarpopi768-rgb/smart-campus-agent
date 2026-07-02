@@ -1,4 +1,5 @@
 from ui.gradio_ui import create_ui
 
-demo = create_ui()
-demo.launch()
+if __name__ == "__main__":
+    demo = create_ui()
+    demo.launch()
