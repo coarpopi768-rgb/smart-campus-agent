@@ -1,10 +1,8 @@
-﻿"""Tests: Supervisor Routing Logic - Python 3.7+ compatible"""
+"""Tests: Supervisor Routing Parsing - tests the REAL parse_supervisor_output from agents/parsing"""
 import sys, os
-sys.path.insert(0, '.')
-os.environ.setdefault('zhipuai_api_key', 'test-key')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import re
-from typing import Tuple
+from agents.parsing import parse_supervisor_output, VALID_WORKERS
 
 SIMULATED_RESPONSES = {
     "lookup_score": (
@@ -42,79 +40,55 @@ SIMULATED_RESPONSES = {
 }
 
 
-def parse_supervisor_response(raw):
-    # type: (str) -> Tuple[str, str, str]
-    """Replicate the parsing logic from supervisor_node."""
-    nw = "FINISH"
-    think = ""
-    decision_text = ""
-
-    think_match = re.search(r'\[THINK\](.*?)(?=\[DECISION\]|\Z)', raw, re.DOTALL | re.IGNORECASE)
-    decide_match = re.search(r'\[DECISION\](.*)', raw, re.DOTALL | re.IGNORECASE)
-
-    if think_match:
-        think = think_match.group(1).strip()
-    if decide_match:
-        decision_text = decide_match.group(1).strip()
-        if decision_text.upper().startswith("NEXT:"):
-            candidate = decision_text.split("NEXT:")[-1].strip().lower()
-            if candidate in ("db_worker", "rag_worker", "email_worker", "search_worker"):
-                nw = candidate
-
-    if nw == "FINISH" and "NEXT:" in raw.upper():
-        candidate = raw.upper().split("NEXT:")[-1].strip().lower()
-        if candidate in ("db_worker", "rag_worker", "email_worker", "search_worker"):
-            nw = candidate
-            think = raw[:200]
-
-    return nw, think, decision_text
-
-
 def test_parse_db_worker():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["lookup_score"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["lookup_score"])
     assert nw == "db_worker", "Expected db_worker, got {}".format(nw)
     assert "check" in think.lower() and "zhang" in think.lower() and "score" in think.lower()
 
 def test_parse_rag_worker():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["campus_rules"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["campus_rules"])
     assert nw == "rag_worker", "Expected rag_worker, got {}".format(nw)
 
 def test_parse_email_worker():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["email_notify"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["email_notify"])
     assert nw == "email_worker", "Expected email_worker, got {}".format(nw)
 
 def test_parse_search_worker():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["external_search"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["external_search"])
     assert nw == "search_worker", "Expected search_worker, got {}".format(nw)
 
 def test_parse_finish():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["casual_chat"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["casual_chat"])
     assert nw == "FINISH", "Expected FINISH, got {}".format(nw)
 
 def test_parse_multi_step():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["multi_step"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["multi_step"])
     assert nw == "db_worker", "Expected db_worker, got {}".format(nw)
 
 def test_fallback_old_format():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["old_format"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["old_format"])
     assert nw == "db_worker", "Fallback failed, got {}".format(nw)
 
 def test_no_format_graceful():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["no_format"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["no_format"])
     assert nw == "FINISH", "Expected FINISH, got {}".format(nw)
 
 def test_unknown_worker_blocked():
     raw = "[THINK] trying\n[DECISION] NEXT: hacker_worker"
-    nw, think, dec = parse_supervisor_response(raw)
+    nw, think, dec = parse_supervisor_output(raw)
     assert nw == "FINISH", "Unknown worker should default to FINISH, got {}".format(nw)
 
 def test_think_extracted_cleanly():
-    nw, think, dec = parse_supervisor_response(SIMULATED_RESPONSES["lookup_score"])
+    nw, think, dec = parse_supervisor_output(SIMULATED_RESPONSES["lookup_score"])
     assert "NEXT:" not in think, "THINK should not contain DECISION text"
 
 def test_empty_response():
-    nw, think, dec = parse_supervisor_response("")
+    nw, think, dec = parse_supervisor_output("")
     assert nw == "FINISH"
+
+def test_valid_workers_registry():
+    """解析器与 supervisor 的 worker 名单必须一致（db/rag/email/search）"""
+    assert VALID_WORKERS == ("db_worker", "rag_worker", "email_worker", "search_worker")
 
 if __name__ == "__main__":
     all_tests = [f for f in dir() if f.startswith('test_')]

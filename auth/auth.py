@@ -1,9 +1,12 @@
-﻿"""RBAC access control module - Python 3.7+ compatible"""
+"""RBAC access control module - Python 3.7+ compatible"""
 from __future__ import annotations
-import hashlib, secrets, json
+import hashlib, secrets, json, time
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
+
+# 会话有效期（秒）：24 小时
+SESSION_TTL = 24 * 3600
 
 @dataclass
 class User:
@@ -21,6 +24,7 @@ class Session:
     role: str
     display_name: str
     created_at: str
+    expires_at: float
     student_id: Optional[str] = None
 
 PERMISSIONS = {
@@ -35,6 +39,7 @@ DATA_SCOPE = {"admin": "all", "teacher": "department", "student": "self", "guest
 _USERS_FILE = Path("data") / "users.json"
 
 def _hash_password(password: str) -> str:
+    # 注意：演示项目使用固定盐 SHA-256；生产环境应替换为 bcrypt/argon2 加随机盐
     return hashlib.sha256((password + "smart-campus-salt").encode()).hexdigest()
 
 _DEFAULT_USERS = [
@@ -59,12 +64,16 @@ def _load_users() -> list:
 
 _sessions: dict = {}
 
+def _now_str() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
 def authenticate(username: str, password: str) -> Optional[Session]:
     for u in _load_users():
         if u.username == username:
             if u.password_hash == _hash_password(password):
                 tok = secrets.token_hex(32)
-                s = Session(tok, u.username, u.role, u.display_name, "now", u.student_id)
+                s = Session(tok, u.username, u.role, u.display_name, _now_str(),
+                            time.time() + SESSION_TTL, u.student_id)
                 _sessions[tok] = s
                 return s
             return None
@@ -72,12 +81,19 @@ def authenticate(username: str, password: str) -> Optional[Session]:
 
 def guest_login() -> Session:
     tok = secrets.token_hex(32)
-    s = Session(tok, "guest", "guest", "Guest", "now")
+    s = Session(tok, "guest", "guest", "Guest", _now_str(), time.time() + SESSION_TTL)
     _sessions[tok] = s
     return s
 
 def validate_session(token: str) -> Optional[Session]:
-    return _sessions.get(token)
+    """校验会话：不存在或已过期返回 None（过期会话会被清除）"""
+    s = _sessions.get(token)
+    if s is None:
+        return None
+    if time.time() > s.expires_at:
+        _sessions.pop(token, None)
+        return None
+    return s
 
 def logout(token: str):
     _sessions.pop(token, None)

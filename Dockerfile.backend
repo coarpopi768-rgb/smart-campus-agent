@@ -1,0 +1,23 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# 安装系统依赖（FAISS 和 sentence-transformers 可能需要）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 先复制依赖文件，利用 Docker 缓存层
+COPY requirements.txt .
+# 使用国内 PyPI 镜像（pypi.org 在国内网络下常连接超时/被重置，导致构建失败）
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+
+# 复制项目代码
+COPY . .
+
+# 创建数据目录
+RUN mkdir -p rag/vectorstore logs
+
+EXPOSE 8000
+
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

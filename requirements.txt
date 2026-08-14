@@ -17,3 +17,9 @@ sentence-transformers
 python-dotenv
 
 requests
+
+mcp
+
+fastapi
+uvicorn[standard]
+sse-starlette

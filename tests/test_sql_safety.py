@@ -1,74 +1,11 @@
-﻿"""Tests: SQL Audit Safety - Zero external dependencies"""
-import sys, re
+"""Tests: SQL Audit Safety - imports the real audit implementation from database/db"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Inline CAMPUS_SCHEMA and audit_sql from database/db.py
-CAMPUS_SCHEMA = {
-    "students": {
-        "description": "Student information",
-        "columns": [
-            ("student_id", "INT PK AUTO_INCREMENT", "Student ID"),
-            ("student_no", "VARCHAR(20)", "Student Number"),
-            ("student_name", "VARCHAR(50)", "Name"),
-            ("gender", "VARCHAR(4)", "Gender M/F"),
-            ("major", "VARCHAR(100)", "Major"),
-            ("class_name", "VARCHAR(50)", "Class"),
-            ("email", "VARCHAR(100)", "Email"),
-        ]
-    },
-    "scores": {
-        "description": "Exam scores",
-        "columns": [
-            ("score_id", "INT PK AUTO_INCREMENT", "Score ID"),
-            ("student_id", "INT FK->students", "Student ID"),
-            ("course_name", "VARCHAR(100)", "Course"),
-            ("score", "DECIMAL(5,2)", "Score"),
-            ("semester", "VARCHAR(20)", "Semester"),
-        ]
-    },
-    "courses": {
-        "description": "Courses",
-        "columns": [
-            ("course_id", "INT PK AUTO_INCREMENT", "Course ID"),
-            ("course_name", "VARCHAR(100)", "Course"),
-            ("teacher_name", "VARCHAR(50)", "Teacher"),
-            ("credit", "DECIMAL(3,1)", "Credits"),
-        ]
-    },
-    "teachers": {
-        "description": "Faculty",
-        "columns": [
-            ("teacher_id", "INT PK AUTO_INCREMENT", "Teacher ID"),
-            ("teacher_name", "VARCHAR(50)", "Name"),
-            ("department", "VARCHAR(100)", "Department"),
-            ("title", "VARCHAR(50)", "Title"),
-            ("email", "VARCHAR(100)", "Email"),
-        ]
-    },
-}
+# database.db 在 import 时会通过 config.settings 读取 ZHIPUAI_API_KEY，测试环境提供占位值
+os.environ.setdefault("ZHIPUAI_API_KEY", "test-key")
 
-DANGER_PATTERNS = [
-    (r"\bdrop\b\s+\w+", "DROP"),
-    (r"\btruncate\b", "TRUNCATE"),
-    (r"\bdelete\b\s+from\b", "DELETE"),
-    (r"\binsert\b\s+into\b", "INSERT"),
-    (r"\bupdate\b\s+\w+\s+set\b", "UPDATE"),
-    (r"\balter\b\s+\w+", "ALTER"),
-    (r"\bcreate\b\s+\w+", "CREATE"),
-    (r"\bexec\b\s*\(", "EXEC"),
-]
-
-def audit_sql(sql):
-    for pattern, name in DANGER_PATTERNS:
-        if re.search(pattern, sql, re.IGNORECASE):
-            return False, "Dangerous operation: {}".format(name)
-    if not sql.strip().upper().startswith("SELECT"):
-        return False, "Only SELECT allowed"
-    tables = re.findall(r"\bFROM\s+(\w+)", sql, re.IGNORECASE)
-    tables += re.findall(r"\bJOIN\s+(\w+)", sql, re.IGNORECASE)
-    for tbl in tables:
-        if tbl.lower() not in CAMPUS_SCHEMA:
-            return False, "Table not allowed: {}".format(tbl)
-    return True, "OK"
+from database.db import audit_sql, CAMPUS_SCHEMA
 
 
 def test_select_allowed():
